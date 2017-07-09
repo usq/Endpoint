@@ -80,13 +80,8 @@ function Endpoint() {
 	    var that = this	    
 	    $.get(url, function(resp, other) {
 		if(callback != undefined) {
-		    if (that.configuration.use_router) {
-			callback(resp)			
-		    } else {
-			var response = createResponseFromXML(resp)
-			callback(response)
-		    }
-
+		    var response = createResponseFromXML(resp)
+		    callback(response)
 		}		
 	    });
 	},
