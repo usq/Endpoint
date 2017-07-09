@@ -30,6 +30,9 @@ function Response(fromResponse) {
     this.htmlNode = function() {
 	return __domParser.parseFromString(that.raw, "text/html")
     }
+    this.htmlDocument = this.htmlNode
+    this.xmlDocument = this.domNode
+    
 }
 
 function randomId() {
