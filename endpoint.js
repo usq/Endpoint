@@ -39,9 +39,160 @@ function randomId() {
     return window.crypto.getRandomValues(new Uint32Array(1))[0]
 }
 
+
 function Endpoint() {
     
     return {
+	startstream: function() {
+	    document.addEventListener('DOMContentLoaded', function(){
+
+		var streamElements = document.getElementsByTagName("stream")
+		var firstStream = streamElements[0]
+		console.log(firstStream)
+		var wsPath = firstStream.getAttribute("src")
+		var transformationPath = firstStream.getAttribute("transform")
+		var subscription = firstStream.getAttribute("subscription")
+		var init = firstStream.getAttribute("init")
+		var params = {};
+
+
+		var actionTag = null;
+		var actionToggle = null;
+		var actionURL = null;
+		var payloadMapping = {}
+		for (var i = 0; i < firstStream.children.length; i++) {
+		    var el = firstStream.children[i]
+		    if (el.tagName == "XSLTPARAMS") {
+			for (var k = 0; k < el.children.length; k++) {
+			    var param = el.children[k]
+			    if (param.tagName == "PARAM") {
+				var key = param.getAttribute("key")
+				var value = param.getAttribute("value")
+
+				params[key] = value
+			    }
+			}
+		    } else if (el.tagName == "ACTION") {
+			for (var k = 0; k < el.children.length; k++) {
+			    var actionChild = el.children[k]
+			    if (actionChild.tagName == "TAG") {
+				actionTag = actionChild.getAttribute("value")
+				actionToggle = actionChild.getAttribute("addactionwhenpresent")
+			    } else if (actionChild.tagName == "METHOD") {
+				//always use post now
+			    } else if (actionChild.tagName == "URL") {
+				actionURL = actionChild.getAttribute("value")
+			    } else if (actionChild.tagName == "CONTENT") {
+				for(var j = 0; j < actionChild.children.length; j++) {
+				    var contentChild = actionChild.children[j];
+				    if (contentChild.tagName == "PAYLOAD") {
+					var key = contentChild.getAttribute("key")
+					var tag = contentChild.getAttribute("tag")
+					payloadMapping[key] = tag
+				    }
+				}
+			    }
+			    
+			}
+		    }
+
+		}
+		console.log(params)
+		console.log(payloadMapping)
+
+		function updateLinks(element) {
+		    var elements = element.getElementsByTagName(actionTag)
+		    for (var k = 0; k < elements.length; k++) {
+			var el = elements[k]
+			
+			if (el.getAttribute(actionToggle) == null) {
+			    continue
+			}
+
+			el.setAttribute(actionToggle, "")
+			el.addEventListener("click", function(el){
+			    var clicked = el.currentTarget
+
+			    var data = {}
+			    for (key in payloadMapping) {
+				var mapped = payloadMapping[key]
+				data[key] = clicked.getAttribute(mapped)
+			    }
+			    
+			    console.log(data)
+
+
+			    var bodyData = undefined
+			    var contentType = undefined
+			    var urlEncodedDataPairs = [];
+			    for(name in data) {
+				urlEncodedDataPairs.push(encodeURIComponent(name) + '=' + encodeURIComponent(data[name]));
+			    }
+			    bodyData = urlEncodedDataPairs.join('&').replace(/%20/g, '+');
+			    contentType = "application/x-www-form-urlencoded"
+			    console.log("posting")
+			    console.log(actionURL)
+    			    $.ajax({
+    	    			type: 'POST',
+    	    			url: actionURL,
+    	    			data: bodyData,
+    	    			contentType: contentType,
+    	    			success: function(data) {
+    	    			    console.log("posted")
+				},
+				error: function (responseData, textStatus, errorThrown) {
+				    console.log(responseData)
+				    console.log(textStatus)
+				}
+			    });
+
+
+			    
+			})
+		    }
+		}
+		
+		var action = function(response) {
+			if(transformationPath != null) {
+			    //var xslParams = {"gameId": gameId, "playerId": playerId, host: "localhost"}
+			    response.transform(transformationPath, params, function(element) {
+				firstStream.innerHTML = element.raw
+				updateLinks(firstStream)
+			    });
+			} else {
+			    firstStream.innerHTML = response.raw
+			    updateLinks(firstStream)
+			}
+		    }
+		
+		//open the websocket
+		var that = this
+		document["__endpoint"] = this	    
+		var ws = $.websocket(wsPath, {
+		    open: function() {
+			console.log("connected websocket")
+			this.send("subscribe", [subscription])
+			
+		    },
+		    events: {
+			//default answer
+			xmlresponse: function(el) {
+			    var resp = new Response(el)
+			    action(resp)
+			}
+		    }
+		});
+
+		if(init != null) {
+		     $.get(init, function(resp, other) {
+			 var response = createResponseFromXML(resp)
+			 action(response)
+		     });
+		}
+	    }, false);
+	    
+	},
+	
 	configuration : {
 	    ws_path: "ws://localhost:8080",
 	    use_router: false
